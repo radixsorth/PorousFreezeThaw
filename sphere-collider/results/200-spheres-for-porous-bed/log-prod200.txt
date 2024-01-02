@@ -1,0 +1,7 @@
+>> spheres_prod
+Running the simulation ...
+24086 successful steps
+1242 failed attempts
+151969 function evaluations
+Simulation completed in 37059.2 seconds.
+>> save('r-prod200.mat');

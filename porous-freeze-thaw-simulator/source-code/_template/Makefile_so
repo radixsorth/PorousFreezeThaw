@@ -1,0 +1,26 @@
+# Digithell HyperGeneric Makefile
+# (shared library)
+# (C) 2005 Digithell, Inc. (Pavel Strachota)
+# =====================================
+
+include ../../_settings/settings.mk
+
+# -------------------------------------
+
+LIBNAME = < s h a r e d _ l i b r a r y _ n a m e >
+
+# -------------------------------------
+MODULE_SOURCES = $(wildcard *.c)
+MODULES = $(patsubst %.c,%.o,$(MODULE_SOURCES))
+
+$(LIB_PATH)/lib$(LIBNAME).so : $(MODULES) $(SETTINGS)
+	$(CC) -shared -Wl,-soname=lib$(LIBNAME).so -o $(LIB_PATH)/lib$(LIBNAME).so $(filter %.o,$?) -lm
+
+%.o : %.c $(INC_PATH)/$(LIBNAME).h $(SETTINGS)
+	$(CC) $(CC_FLAGS) $(INC_COMMAND) -c $<
+
+# -------------------------------------
+
+.PHONY : clean
+clean :
+	rm -f *.o

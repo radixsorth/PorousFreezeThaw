@@ -1,0 +1,114 @@
+#!/bin/bash
+##!/opt/OpenSource/bin/bash
+
+# Makes all applications at once
+# (C) 2005-2007 Pavel Strachota (Digithell, Inc.)
+
+MAKE=make
+#MAKE=/opt/OpenSource/bin/make
+
+scandir() {
+# recursively scans all the directories below the current directory,
+# searches for a Makefile in them and executes a make command if a
+# Makefile is found
+#
+
+    local directory
+
+    # the for cycle does not like spaces in directories since it treats spaces as
+    # list item delimiters. Here we don't mind. However, there is a solution to
+    # this issue introduced in the 'pngize_all' script in ../Doc/scripts .
+    for directory in `ls -r -1 -p | grep / `
+    do
+        cd $directory
+	CurrentPath=${PWD#"$BasePath/"}		# remove the base directory from the full path
+        echo Searching for a Makefile in: $CurrentPath
+	if [ -e Makefile ]
+	then
+	    echo
+	    echo "*******************************************************"
+	    echo "Executing make in ${directory%/}"
+	    echo "----------------------------"
+	    MakeDir[$i]=$CurrentPath
+	    if $MAKE $parameter
+	    then
+	        MakeStat[$i]="OK."
+		let MakeOK++
+	    else
+	        MakeStat[$i]="Failed."
+		let MakeFault++
+	    fi
+	    let i++
+	    echo "----------------------------"
+	    echo "Done."
+	    echo "*******************************************************"
+	    echo
+	fi
+	scandir
+        cd ..
+    done
+}
+
+clear
+echo "MAKE ALL AUTOMATION:"
+echo "Usage: make_all [clean]"
+
+unanswered=true
+
+while $unanswered		# wait until either y or n is pressed
+do
+	if [ -z $1 ]
+	then
+    	    read -n 1 -p "Do you REALLY want to make all applications at once? [Y/N] :" rb
+	else
+    	    read -n 1 -p "Do you REALLY want to \"make $1\" all applications at once? [Y/N] :" rb
+	fi
+	if [ "$rb" == "y" ]
+	then
+	    echo -e "\nSTARTING RECURSIVE SCAN !"
+	    parameter=$1
+	    let i=0
+	    let MakeOK=0
+	    let MakeFault=0
+	    BasePath=$PWD
+
+	    # scan the applications' directory only:
+	    # NOTE: If you comment this out, everything including modules and libraries
+	    # is made. The applications are made after the libraries and modules as long
+	    # as they are in the 'apps' directory and the directory listing is sorted
+	    # in reverse ASCII order.
+	    # However, this isn't really important if the applications' makefiles comply with
+	    # the Digithell Hypergeneric Makefile System). If they do, then making everything
+	    # including modules and libs is only useful when we want to 'make clean'.
+
+	    #cd apps
+
+	    scandir
+
+	    #cd ..
+
+	    echo
+	    echo "======================================================="
+	    echo -e "MAKE ALL COMPLETED. Summarizing results:\n"
+	    for (( j=0; j<i; j++ ))
+	    do
+		MakeDirectory=${MakeDir[$j]}
+		let length=${#MakeDirectory}
+		echo -n "make in $MakeDirectory :"
+		for (( k=0; k< (60-length) ; k++ ))	# fill with spaces to a fixed line length
+		do
+		    echo -n " "
+		done
+	        echo "${MakeStat[$j]}"
+	    done
+	    echo
+	    echo "Total make invocations: $i, $MakeOK succeeded, $MakeFault failed."
+	    unanswered=false
+	elif [ "$rb" == "n" ]
+	then
+	    echo -e "\nNot done."
+	    unanswered=false
+	else
+	    echo
+	fi
+done

@@ -1,0 +1,137 @@
+# INTERTRACK phase interface evolution simulator
+# sample parameters file for simulation of freezing around glass balls
+# --------------------------------------------------------------------
+
+# Initial conditions definition
+# ----------------------------
+
+# 20 C room temperature
+icond u = "293.15"
+# initial ice at the boundary of the cap (must be zero if Model 2 is selected)
+icond p = "z>0.052 and z<0.058 and ((x-L1/2)^2+(y-L2/2)^2 < (L1/3)^2)"
+#icond p = "0"
+
+# The initial condition for the glass phase field is modified in the PrecalculateData() function
+# by setting it to 1 inside all glass balls. Here we initialize the upper glass "cover"
+#icond gl = "z>0.055 and ((x-L1/2)^2+(y-L2/2)^2 < (L1/3)^2)"
+#icond gl = "z>0.055"
+# ... or with a smoooth glass/water interface:
+icond gl = "0.5*(1.0 + tanh(0.5/xi_gl*(z-0.055))"
+
+# File names definition
+# ---------------------
+
+set logfile = $OUTPUT/intertrack.log
+set out_file = $OUTPUT/image out_file_suffix = .ncd
+
+# Debug settings
+# ----------------
+
+set debug_logfile = $OUTPUT/RK.log
+set snapshot_trigger = $OUTPUT/t
+
+# Batch mode postprocessing options
+# ---------------------------------
+
+#set pproc_script = PostProc_Scripts/Compress
+#set pproc_nofail pproc_nowait #pproc_waitfirst
+
+# =============================================
+
+# 1 hour is 60*60 seconds
+hours		60*60
+
+# Common model parameters 
+# -----------------------
+
+# domain dimensions
+L1		0.03
+L2		0.03
+L3		0.06
+
+u_noise_amp	0
+
+# material constants
+water_cp	4.18e3
+ice_cp		2.05e3
+glass_cp	0.84e3
+water_lambda	0.6
+ice_lambda	2.22
+glass_lambda	1.1
+water_rho	997
+ice_rho		917
+glass_rho	2500
+
+u_star		273.15
+L		3.34e5
+
+# Glass phase field representation parameters
+# -------------------------------------------
+
+xi_gl           L3/500
+zeta            1.05
+
+# Phase field model parameters
+# ----------------------------
+
+xi		L3/100
+a		2
+b		1
+alpha		water_rho*water_cp
+mu		1e-4
+
+# SigmaP1-P model parameters (used if calc_mode==1)
+p_eps0		0.05
+p_eps1		0.2
+
+# Temperature-based freezing model parameters
+# -------------------------------------------
+
+# currently not used - applies to Sasha's model
+#u_D		0.01
+
+gamma		2
+
+# Simulation freezing / thawing phases setup
+# ------------------------------------------
+
+top_temp1	        273.15 - 25
+top_temp2	        273.15 + 20
+phase_switch_time       5*hours
+
+# glass balls parameters
+ball_radius	0.1*L1
+
+# Model selection
+# ---------------
+
+# calc_mode	model
+# -------------------
+# 0		Phase Field with GradP reaction term
+# 1		Phase Field with SigmaP1-P reaction term
+# 2		heat equation only, with latent heat release focusing at u*
+calc_mode	0
+
+# Simulation parameters 
+# ---------------------
+
+final_time	10*hours
+saved_files	100
+delta		1e-3
+tau_min		1e-6
+tau		1
+
+# Grid dimensions
+# ---------------
+
+# The grid will have 'grid_nodes' along the longest side of the domain
+
+#grid_nodes	400
+grid_nodes	100
+multiplier	grid_nodes / (L1 max L2 max L3)
+
+n1		L1 * multiplier
+n2		L2 * multiplier
+n3		L3 * multiplier
+
+set comment="Testing run"

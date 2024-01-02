@@ -1,0 +1,10 @@
+#!/bin/bash
+
+read -n 1 -p "Are you sure you want to force rebuild? [Y/N] :" rb
+if [ $rb == "y" ]
+then 
+echo -e "\nFORCING REBUILD OF ALL TARGETS !"
+touch _settings/settings.mk
+else
+echo -e "\nNot done."
+fi

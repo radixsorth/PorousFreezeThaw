@@ -1,0 +1,22 @@
+# vtk DataFile Version 2.0
+File Description (any string)			; !!! This is not a true vtk datafile, it contains comments
+ASCII						; File mode: ASCII or BINARY
+DATASET STRUCTURED_POINTS			; File type
+DIMENSIONS       5      5        2		; Dimensions of supplied data
+ORIGIN          -0.5     -0.5     -0.5		; coords of the first element in the structure in the coord system
+SPACING           0.2       0.2       0.5	; graphical spacing: SPACING*DIMENSION shoud be 1 to fill
+						; the whole renderer
+POINT_DATA          50				; only first POINT_DATA values will be loaded
+SCALARS scalars int				; number format (e.g 'int', 'float')
+LOOKUP_TABLE default
+
+1	3	6	3	1		; data in any formatting (e.g. one number per line)
+1	4	5	7	2
+2	3	5	8	3
+4	4	6	9	5
+3	3	4	7	4
+2	4	6	3	1
+1	5	6	7	3
+2	3	7	9	3
+4	4	6	8	5
+4	3	4	7	5

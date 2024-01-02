@@ -1,0 +1,62 @@
+#!/bin/sh
+
+PROC_NO=1
+MPIRUN=mpirun
+
+# allow using $OUTPUT in the parameters file
+
+export OUTPUT=OUTPUT
+
+# --------- OpenMP settings ---------
+
+# default behavior: start a single thread per process
+export OMP_NUM_THREADS=1
+
+# bind OpenMP threads to core (TRUE/FALSE)
+export OMP_PROC_BIND=FALSE
+
+# loop scheduling policy: one of static, dynamic, guided, auto
+export OMP_SCHEDULE=static
+
+# explicit binding of threads to CPU IDs
+#export GOMP_CPU_AFFINITY="0 1 2 3"
+
+# -----------------------------------
+
+if [ -n "$1" ]
+then
+    echo "Overriding the default number of processes."
+    PROC_NO=$1
+fi
+
+if [ -n "$2" ]
+then
+    echo "Overriding the default number of threads per process."
+    export OMP_NUM_THREADS=$2
+fi
+
+# ----- Running the simulation ------
+
+
+# note that modern MPI libraries can bind ranks to cores or sockets.
+# Be careful not to run multi-threaded ranks bound to a single core!
+
+# OpenMPI: useful for pure MPI parallelization on the node
+# (when there is 1 thread per rank, we can afford to bind ranks to cores)
+
+#$MPIRUN -np $PROC_NO --bind-to core -report-bindings ./intertrack Params
+
+# ------
+
+# Open MPI: useful for OpenMP parallelization on the node
+# (if ranks were bound to cores, all threads of one rank would be bound to the same core!!)
+# If using more MPI processes per node, they may accidentally be bound to the same core
+# when OMP_PROC_BIND=TRUE. If this happens, set OMP_PROC_BIND=FALSE
+
+$MPIRUN -np $PROC_NO --bind-to none -report-bindings ./intertrack Params
+
+# ------
+
+# LAM MPI: (no control over rank-to-core binding) => by default, no binding is imposed from the MPI side
+
+#$MPIRUN -np $PROC_NO -x OMP_NUM_THREADS,OMP_PROC_BIND,OMP_SCHEDULE ./intertrack Params

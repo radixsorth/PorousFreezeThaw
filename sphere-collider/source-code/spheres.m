@@ -10,6 +10,7 @@ simulate = 0;
 % 0 = no plot, 1 = plot the whole evolution, 2 = only plot the final state
 plot_result = 1;
 
+workspace_snapshot_file = 'spheres.mat';
 
 % number of spheres
 n = 20;
@@ -69,7 +70,7 @@ if(simulate)
     [t, y] = ODE_solver(@rhs, linspace(0,T,snapshots), init_cond, ODE_solver_options);
     time = toc;
     fprintf('Simulation completed in %g seconds.\n',time);
-
+    save(workspace_snapshot_file);
 end
 
 % for a test with a single ball, do this to plot the evolution of the vertical position:

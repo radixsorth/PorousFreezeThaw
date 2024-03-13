@@ -1,15 +1,18 @@
 % SPHERES
 % simulation of colllisions and settling of falling spheres
 % into a vessel
-% (C) 2022-2023 Pavel Strachota
+% (C) 2022-2024 Pavel Strachota
 
-global n r h0 R T g dissipation_focusing kin_energy_fraction collision_force_multiplier collision_force_exponent
+% 100 spheres sparsely distributed in space falling from a high elevation
+
+global n r h0 R T g ZERO dissipation_focusing kin_energy_fraction collision_force_multiplier collision_force_exponent
 
 % 1 = do the simulation, 0 = skip the simulation (a plot from a previous simulation can be performed though)
-simulate = 0;
+simulate = 1;
 % 0 = no plot, 1 = plot the whole evolution, 2 = only plot the final state
-plot_result = 1;
+plot_result = 0;
 
+workspace_snapshot_file = 'spheres_100_sparse.mat';
 
 % number of spheres
 n = 100;
@@ -20,14 +23,14 @@ h0 = 1.0+r;
 % vessel dimensions
 R = 1;
 % final time
-T = 10;
+T = 8;
 % coefficient of restitution
 COR = 0.4;
 % focusing of the transition from full force when the collision is in its
 % first (approaching) phase and the reduced force when the collision is in
 % its second (separation) phase. The higher the value, the thinner is
 % the transition (see the rebound() function)
-dissipation_focusing = 100;
+dissipation_focusing = 10;
 
 % parameters of the collision force
 collision_force_multiplier = 10;
@@ -39,7 +42,10 @@ ODE_solver = @ode45;
 ODE_solver_options = odeset('RelTol',1e-6,'AbsTol',1e-4,'MaxStep',0.01,'Stats','on');
 
 % snapshots
-snapshots = 500;
+snapshots = 400;
+
+% regularization
+ZERO = 1e-8;
 
 % -----------------------------------------------------------
 
@@ -66,7 +72,7 @@ if(simulate)
     [t, y] = ODE_solver(@rhs, linspace(0,T,snapshots), init_cond, ODE_solver_options);
     time = toc;
     fprintf('Simulation completed in %g seconds.\n',time);
-
+    save(workspace_snapshot_file);
 end
 
 % for a test with a single ball, do this to plot the evolution of the vertical position:
@@ -102,7 +108,7 @@ for q=start_with_snapshot:snapshots
     camlight left
     lighting flat
     axis equal
-    axis([-0.1*R 1.1*R -0.1*R 1.1*R 0 10*R]);
+    axis([-0.1*R 1.1*R -0.1*R 1.1*R -0.1*R 10*R]);
     drawnow();
     q
     exportgraphics(gca,['plots/' sprintf('%03d.png',q)]);
@@ -130,7 +136,7 @@ function cf = collision_factor(surface_distance)
 end
 
 function dy_dt = rhs(t,y)
-    global n g r R
+    global n g r R ZERO
     % reshape to a matrix where each row corresponds to 3 components of
     % position followed by 3 components of velocity of one particle
     y=reshape(y,n,6);
@@ -144,12 +150,13 @@ function dy_dt = rhs(t,y)
         for j=(i+1):n
             % mutual position (j-th w.r.t. i-th particle)
             mp = y(j,1:3) - y(i,1:3);
-            distance = norm(mp);
+            distance = norm(mp) + ZERO;
             % mutual velocity
             mv = y(j,4:6) - y(i,4:6);
             % derivative of mutual distance w.r.t. time
             % (shows if the particles are moving toward or away from each other)
-            heading = 2 * dot(mp,mv);
+            %heading = 2 * dot(mp,mv);
+            heading = dot(mp,mv) / distance;
             % collisional acceleration: If the particles are approaching each other (heading<0),
             % the forces act as in a perfectly elastic collision. If the
             % particles are moving away from each other, the repulsive

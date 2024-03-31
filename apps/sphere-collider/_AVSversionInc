@@ -1,0 +1,12 @@
+#!/bin/bash
+##!/opt/OpenSource/bin/bash
+
+while read -r def ident value
+do
+    eof=$?
+    if [ "$ident" == "__BUILD" ]
+    then
+	let value=$value+1
+    fi
+    echo "$def $ident $value"
+done

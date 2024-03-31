@@ -5,8 +5,8 @@
 * file: _AVScurrentv.h				*
 \***********************************************/  
   
-#define __MAJOR_VERSION "2"
+#define __MAJOR_VERSION "1"
 #define __MINOR_VERSION "0"
 #define __RELEASE "1"
-#define __BUILD 166
-#define __VERSION_INFO "Hybrid OpenMP/MPI Freezing Glass Balls"
+#define __BUILD 1
+#define __VERSION_INFO "A short version description..."

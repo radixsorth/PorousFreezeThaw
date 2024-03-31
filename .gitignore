@@ -1,0 +1,11 @@
+/.project
+*.o
+*.a
+*.nc
+*.ncd
+*.ncdf
+*.log
+*.csv
+_AVScurrentv.h
+/apps/intertrack-hybrid-S-freezing/intertrack
+/apps/sphere-collider/spheres

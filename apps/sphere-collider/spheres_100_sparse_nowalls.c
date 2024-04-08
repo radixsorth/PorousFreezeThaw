@@ -31,12 +31,14 @@ const FLOAT R = 1.0;
 // final time
 const FLOAT T = 8.0;
 // coefficient of restitution
-const FLOAT COR = 0.4;
+const FLOAT COR = 0.1;
 // focusing of the transition from full force when the collision is in its
 // first (approaching) phase and the reduced force when the collision is in
 // its second (separation) phase. The higher the value, the thinner is
 // the transition (see the rebound() function)
 const FLOAT dissipation_focusing = 10;
+
+const FLOAT friction = 0.5;
 
 // parameters of the collision force
 const FLOAT collision_force_multiplier = 10;
@@ -184,8 +186,8 @@ the right hand side of the equation system
 */
 {
 	int i,j;
-	FLOAT mp[3], mv[3];
-	FLOAT distance, heading;
+	FLOAT mp[3], mv[3], mv_tangent[3];
+	FLOAT distance, heading, CF;
 	// human-understandable aliases for the portions of the arrays y and dy_dt
 	const FLOAT * pos = y;
 	const FLOAT * vel = y + 3*n;
@@ -208,33 +210,43 @@ the right hand side of the equation system
 			vmov(mp, VEC(pos,j));
 			vsub(mp, VEC(pos,i));
 			distance = norm(mp) + ZERO;
+			vmult(mp, 1.0/distance);
 			// mutual velocity
 			vmov(mv, VEC(vel,j));
 			vsub(mv, VEC(vel,i));
 			// derivative of mutual distance w.r.t. time
             		// (shows if the particles are moving toward or away from each other)
             		//heading = 2 * dot(mp,mv);
-            		heading = dot(mp,mv) / distance;
+            		heading = dot(mp,mv);
+			CF = collision_factor(distance-2*r);
 			// sum up the acceleration of the i-th particle induced by the j-th particle
-			vmadd(VEC(acc,i), -collision_factor(distance-2*r) * rebound(-heading) / distance, mp);
+			// (tangential component of the mutual velocity is not calculated explicitly
+			// as the frictional forces are split directly into the directions mp & mv)
+			vmadd(VEC(acc,i), - CF * (rebound(-heading) + heading*friction), mp);
+			vmadd(VEC(acc,i), CF*friction, mv);
 		}
 		
 		// repulsive forces at vessel walls
 		// bottom
         	distance = VEC(pos,i)[2];
-        	vmadd(VEC(acc,i), rebound(-VEC(vel,i)[2]) * collision_factor(distance-r), UP);
+		CF = collision_factor(distance-r);
+		// tangential mutual velocity
+		vmov(mv_tangent, VEC(vel,i));
+		vmadd(mv_tangent, -dot(VEC(vel,i),DOWN), DOWN);
+        	vmadd(VEC(acc,i), rebound(-VEC(vel,i)[2]) * CF, UP);
+		vmadd(VEC(acc,i), - CF * friction, mv_tangent);
         	// left
-        	distance = VEC(pos,i)[0];
-        	vmadd(VEC(acc,i), rebound(-VEC(vel,i)[0]) * collision_factor(distance-r), EAST);
+        	//distance = VEC(pos,i)[0];
+        	//vmadd(VEC(acc,i), rebound(-VEC(vel,i)[0]) * collision_factor(distance-r), EAST);
         	// right
-        	distance = R - VEC(pos,i)[0];
-        	vmadd(VEC(acc,i), rebound(VEC(vel,i)[0]) * collision_factor(distance-r), WEST);
+        	//distance = R - VEC(pos,i)[0];
+        	//vmadd(VEC(acc,i), rebound(VEC(vel,i)[0]) * collision_factor(distance-r), WEST);
         	// front
-        	distance = VEC(pos,i)[1];
-        	vmadd(VEC(acc,i), rebound(-VEC(vel,i)[1]) * collision_factor(distance-r), NORTH);
+        	//distance = VEC(pos,i)[1];
+        	//vmadd(VEC(acc,i), rebound(-VEC(vel,i)[1]) * collision_factor(distance-r), NORTH);
         	// rear
-        	distance = R - VEC(pos,i)[1];
-        	vmadd(VEC(acc,i), rebound(VEC(vel,i)[1]) * collision_factor(distance-r), SOUTH);
+        	//distance = R - VEC(pos,i)[1];
+        	//vmadd(VEC(acc,i), rebound(VEC(vel,i)[1]) * collision_factor(distance-r), SOUTH);
 	}
 }
 

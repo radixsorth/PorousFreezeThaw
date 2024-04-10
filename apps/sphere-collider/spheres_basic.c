@@ -30,6 +30,13 @@ const FLOAT h0 = 1.0+r;
 const FLOAT R = 1.0;
 // final time
 const FLOAT T = 8.0;
+
+// initial conditions (definitions are below)
+void icond_sparse(FLOAT * y, FLOAT *color);
+void icond_dense(FLOAT * y, FLOAT *color);
+// choose the initial condition here:
+void (*icond)(FLOAT * y, FLOAT *color) = icond_dense;
+
 // coefficient of restitution
 const FLOAT COR = 0.4;
 // focusing of the transition from full force when the collision is in its
@@ -37,8 +44,6 @@ const FLOAT COR = 0.4;
 // its second (separation) phase. The higher the value, the thinner is
 // the transition (see the rebound() function)
 const FLOAT dissipation_focusing = 10;
-
-const FLOAT friction = 0.5;
 
 // parameters of the collision force
 const FLOAT collision_force_multiplier = 10;
@@ -59,6 +64,31 @@ const char * filename_format = "OUTPUT/%s_%03d.csv";
 
 // regularization
 const FLOAT ZERO = 1e-8;
+
+/* -------------------------------------------------------------- */
+
+// walls definition
+
+typedef struct {
+	FLOAT P[3];		/* reference point*/
+	FLOAT n[3];		/* normal vector */
+} PLANE;
+
+PLANE wall[] = {
+	 { {0,0,0}, {0,0,-1} }	/* bottom */
+	,{ {0,0,0}, {-1,0,0} }	/* left */
+	,{ {1,0,0}, {1,0,0} }	/* right */
+//	,{ {1,0,0}, {1,0,-1} }	/* right - inclined*/
+	,{ {0,0,0}, {0,-1,0} }	/* front */
+	,{ {0,1,0}, {0,1,0} }	/* rear */
+};
+
+const int num_walls = sizeof(wall) / sizeof(PLANE);
+/* or the floor (bottom) only */
+//const int num_walls = 1;
+
+/* -------------------------------------------------------------- */
+
 
 /* -------------------------------------------------------------- */
 
@@ -101,58 +131,51 @@ FLOAT randF()
 	return(((FLOAT)rand()) / ((FLOAT)RAND_MAX));
 }
 
-FLOAT UP[3] = { 0, 0, 1 };
-FLOAT DOWN[3] = { 0, 0, -1 };
-FLOAT EAST[3] = { 1, 0, 0 };
-FLOAT WEST[3] = { -1, 0, 0 };
-FLOAT NORTH[3] = { 0, 1, 0 };
-FLOAT SOUTH[3] = { 0, -1, 0 };
-
 #define VEC(arg,i) (arg+3*(i))
 
 /* vector arithmetic functions */
 
-inline void vmov(FLOAT *a, const FLOAT *b)
+static inline void vmov(FLOAT *a, const FLOAT *b)
 {
 	a[0] = b[0];
 	a[1] = b[1];
 	a[2] = b[2];
 }
 
-inline void vadd(FLOAT * a, const FLOAT * b)
+static inline void vadd(FLOAT * a, const FLOAT * b)
 {
 	a[0] += b[0];
 	a[1] += b[1];
 	a[2] += b[2];
 }
 
-inline void vsub(FLOAT * a, const FLOAT * b)
+static inline void vsub(FLOAT * a, const FLOAT * b)
 {
 	a[0] -= b[0];
 	a[1] -= b[1];
 	a[2] -= b[2];
 }
 
-inline void vmult(FLOAT * a, const FLOAT b)
+static inline void vmult(FLOAT * a, const FLOAT b)
 {
 	a[0] *= b;
 	a[1] *= b;
 	a[2] *= b;
 }
 
-inline void vmadd(FLOAT * a, const FLOAT b, const FLOAT *c)
+static inline void vmadd(FLOAT * a, const FLOAT b, const FLOAT *c)
 {
 	a[0] += b*c[0];
 	a[1] += b*c[1];
 	a[2] += b*c[2];
 }
 
-inline FLOAT dot(const FLOAT *a, const FLOAT *b)
+static inline FLOAT dot(const FLOAT *a, const FLOAT *b)
 {
 	return( a[0]*b[0] + a[1]*b[1] + a[2]*b[2] );
 }
 
-inline FLOAT norm(const FLOAT *a)
+static inline FLOAT norm(const FLOAT *a)
 {
 	return( sqrtF(dot(a,a)) );
 }
@@ -161,7 +184,7 @@ inline FLOAT norm(const FLOAT *a)
 
 FLOAT kin_energy_fraction;		/* =COR^2 ... initialized in main() */
 
-inline FLOAT rebound(FLOAT v)
+static inline FLOAT rebound(FLOAT v)
 /*
 a smooth version of a function that basically returns
 1 for v>0
@@ -171,7 +194,7 @@ kin_energy_fraction for v<0
     return( kin_energy_fraction + 0.5*(1.0-kin_energy_fraction)*(1.0+tanh(v*dissipation_focusing)) );
 }
 
-inline FLOAT collision_factor(FLOAT surface_distance)
+static inline FLOAT collision_factor(FLOAT surface_distance)
 /*
 a collision force factor depending on the distance of the surfaces of the colliding objects
 */
@@ -179,6 +202,17 @@ a collision force factor depending on the distance of the surfaces of the collid
    return( collision_force_multiplier * expF(-(collision_force_exponent*(surface_distance)/r)) );
 }
 
+static inline FLOAT friction_factor(FLOAT x)
+/* Sshape (sigma-limiter) based force limiter */
+{
+	static const FLOAT p_eps1 = 0.01;
+
+	static const FLOAT eps2_3 = 3.0 / (p_eps1*p_eps1);
+	static const FLOAT eps3_2 = 2.0 / (p_eps1*p_eps1*p_eps1);
+
+    if(x >= p_eps1) return ( 1.0 );
+    return ( x*x*(eps2_3 - eps3_2*x) );
+}
 
 void rhs(FLOAT t,const FLOAT * y, FLOAT * dy_dt)
 /*
@@ -186,7 +220,7 @@ the right hand side of the equation system
 */
 {
 	int i,j;
-	FLOAT mp[3], mv[3], mv_tangent[3];
+	FLOAT mp[3], mv[3];
 	FLOAT distance, heading, CF;
 	// human-understandable aliases for the portions of the arrays y and dy_dt
 	const FLOAT * pos = y;
@@ -203,70 +237,38 @@ the right hand side of the equation system
 		// initialize acceleration to gravity acceleration
 		vmov(VEC(acc,i), g);
 		
-		// repulsive & frictional forces between all particle pairs
+		// repulsive forces between all particle pairs
 		for(j=0;j<n;j++) {
 			if(i==j) continue;
-			// mutual position (j-th w.r.t. i-th particle)
-			vmov(mp, VEC(pos,j));
-			vsub(mp, VEC(pos,i));
+			// mutual position (i-th w.r.t. j-th particle)
+			vmov(mp, VEC(pos,i));
+			vsub(mp, VEC(pos,j));
 			distance = norm(mp) + ZERO;
-			vmult(mp, 1.0/distance);
-			// mutual velocity
-			vmov(mv, VEC(vel,j));
-			vsub(mv, VEC(vel,i));
-			// derivative of mutual distance w.r.t. time
-            		// (shows if the particles are moving toward or away from each other)
-            		//heading = 2 * dot(mp,mv);
-            		heading = dot(mp,mv);
 			CF = collision_factor(distance-2*r);
-			// sum up the acceleration of the i-th particle induced by the j-th particle
-			// (tangential component of the mutual velocity is not calculated explicitly
-			// as the frictional forces are split directly into the directions mp & mv)
-			vmadd(VEC(acc,i), - CF * (rebound(-heading) + heading*friction), mp);
-			vmadd(VEC(acc,i), CF*friction, mv);
+			// normalize mutual position for further use
+			vmult(mp, 1.0/distance);
+			// mutual velocity (of i-th particle w.r.t. j-th particle)
+			vmov(mv, VEC(vel,i));
+			vsub(mv, VEC(vel,j));
+			// derivative of mutual distance w.r.t. time (or projection of mv into the direction mp)
+			// (shows if the particles are moving toward or away from each other)
+			heading = dot(mv,mp);
+			// add the acceleration of the i-th particle induced by the j-th particle:
+			vmadd(VEC(acc,i), CF * rebound(-heading), mp);
 		}
 		
-		// repulsive forces at vessel walls
-		// bottom
-        distance = VEC(pos,i)[2];
-		CF = collision_factor(distance-r);
-		// tangential mutual velocity
-		vmov(mv_tangent, VEC(vel,i));
-		vmadd(mv_tangent, -dot(VEC(vel,i),DOWN), DOWN);
-        vmadd(VEC(acc,i), rebound(-VEC(vel,i)[2]) * CF, UP);
-		vmadd(VEC(acc,i), - CF * friction, mv_tangent);
-
-		// left
-		distance = VEC(pos,i)[0];
-		CF = collision_factor(distance-r);
-		vmov(mv_tangent, VEC(vel,i));
-		vmadd(mv_tangent, -dot(VEC(vel,i),WEST), WEST);
-		vmadd(VEC(acc,i), rebound(-VEC(vel,i)[0]) * CF, EAST);
-		vmadd(VEC(acc,i), - CF * friction, mv_tangent);
-
-		// right
-		distance = R - VEC(pos,i)[0];
-		CF = collision_factor(distance-r);
-		vmov(mv_tangent, VEC(vel,i));
-		vmadd(mv_tangent, -dot(VEC(vel,i),EAST), EAST);
-		vmadd(VEC(acc,i), rebound(VEC(vel,i)[0]) * CF, WEST);
-		vmadd(VEC(acc,i), - CF * friction, mv_tangent);
-
-		// front
-		distance = VEC(pos,i)[1];
-		CF = collision_factor(distance-r);
-		vmov(mv_tangent, VEC(vel,i));
-		vmadd(mv_tangent, -dot(VEC(vel,i),SOUTH), SOUTH);
-		vmadd(VEC(acc,i), rebound(-VEC(vel,i)[1]) * CF, NORTH);
-		vmadd(VEC(acc,i), - CF * friction, mv_tangent);
-
-		// rear
-		distance = R - VEC(pos,i)[1];
-		CF = collision_factor(distance-r);
-		vmov(mv_tangent, VEC(vel,i));
-		vmadd(mv_tangent, -dot(VEC(vel,i),NORTH), NORTH);
-		vmadd(VEC(acc,i), rebound(VEC(vel,i)[1]) * CF, SOUTH);
-		vmadd(VEC(acc,i), - CF * friction, mv_tangent);
+		// repulsive forces at the walls
+		for(j=0;j<num_walls;j++) {
+			// position w.r.t. the wall reference point
+			vmov(mp,VEC(pos,i));
+			vsub(mp,wall[j].P);
+			distance = fabsF(dot(mp,wall[j].n));
+			CF = collision_factor(distance-r);
+			// velocity toward (!) the wall
+			heading = dot(VEC(vel,i),wall[j].n);
+			// add repulsive force
+			vmadd(VEC(acc,i), - CF * rebound(heading), wall[j].n);
+		}
 	}
 }
 
@@ -292,6 +294,63 @@ RK_RightHandSide m_rhs()
 /* right hand side meta pointer */
 {
 	return(rhs);
+}
+
+/* -------------------------------------------------------------- */
+
+/* versions of the initial conditions */
+
+void icond_sparse(FLOAT * y, FLOAT *color)
+{
+	FLOAT * pos = y;
+	FLOAT * vel = y + 3*n;
+	FLOAT zero_vector[3] = {0,0,0};
+
+	int i;
+	/* initial positions and velocities */
+	for(i=0;i<n;i++) {
+		VEC(pos,i)[0] = r+(R-2*r)*randF();
+		VEC(pos,i)[1] = r+(R-2*r)*randF();
+		VEC(pos,i)[2] = h0+2.0*r*i;
+
+		/* z coordinate used as color */
+		color[i] = VEC(pos,i)[2];
+
+		vmov(VEC(vel,i), zero_vector);
+	}
+}
+
+void icond_dense(FLOAT * y, FLOAT *color)
+{
+	FLOAT * pos = y;
+	FLOAT * vel = y + 3*n;
+	FLOAT zero_vector[3] = {0,0,0};
+
+	int i;
+
+	int balls_per_row = floor(R/(2.5*r));
+	FLOAT distance = R/balls_per_row;
+	int zi=1, yi=1, xi=1;
+
+	for(i=0;i<n;i++) {
+		/* initialize initial positions of the spheres in a jittered grid */
+		VEC(pos,i)[0] = (xi-0.5)*distance + 0.25*r*randF();
+		VEC(pos,i)[1] = (yi-0.5)*distance + 0.25*r*randF();
+		VEC(pos,i)[2] = h0 + (zi-0.5)*distance + 0.25*r*randF();
+
+		xi++;
+		if(xi>balls_per_row) {
+			xi = 1; yi++;
+			if(yi>balls_per_row) {
+				yi = 1; zi ++;
+			}
+		}	
+
+		/* z coordinate used as color */
+		color[i] = VEC(pos,i)[2];
+
+		vmov(VEC(vel,i), zero_vector);
+	}
 }
 
 /* -------------------------------------------------------------- */
@@ -341,37 +400,17 @@ int main(int argc, char *argv[])
 	
 	
 	FLOAT y[6*n];	/* the solution */
-	FLOAT * pos = y;
-	FLOAT * vel = y + 3*n;
-	FLOAT zero_vector[3] = {0,0,0};
 	FLOAT color[n];	/* a constant scalar value to be mapped to the color of each of the spheres */
 	
 	printf("Initializing...\n");
-	int i;
-	/* initial positions and velocities */
+	icond(y,color);
+
+	/* normalize the normal vectors of all planes */
 	{
-		int balls_per_row = floor(R/(2.5*r));
-		FLOAT distance = R/balls_per_row;
-		int zi=1, yi=1, xi=1;
-
-		for(i=0;i<n;i++) {
-			/* initialize initial positions of the spheres in a jittered grid */
-			VEC(pos,i)[0] = (xi-0.5)*distance + 0.25*r*randF();
-			VEC(pos,i)[1] = (yi-0.5)*distance + 0.25*r*randF();
-			VEC(pos,i)[2] = h0 + (zi-0.5)*distance + 0.25*r*randF();
-
-			xi++;
-			if(xi>balls_per_row) {
-				xi = 1; yi++;
-				if(yi>balls_per_row) {
-					yi = 1; zi ++;
-				}
-			}	
-
-			/* z coordinate used as color */
-			color[i] = VEC(pos,i)[2];
-
-			vmov(VEC(vel,i), zero_vector);
+		FLOAT nrm;
+		for(q=0;q<num_walls;q++) {
+			nrm = norm(wall[q].n);
+			vmult(wall[q].n, 1.0/nrm);
 		}
 	}
 
@@ -436,7 +475,7 @@ int main(int argc, char *argv[])
 
 				/* for compatibility with MATLAB code, the numbering starts from 1*/
 				printf("Saving snapshot %d of %d.\n", snap+1, snapshots);
-				save_snapshot(snap+1, pos, color);
+				save_snapshot(snap+1, y, color);
 			} else {
 				;	// currently, MPI parallelization is not supported
 			}

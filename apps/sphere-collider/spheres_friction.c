@@ -45,7 +45,7 @@ const FLOAT COR = 0.4;
 // the transition (see the rebound() function)
 const FLOAT dissipation_focusing = 10;
 
-const FLOAT friction = 0.1;
+const FLOAT friction = 0.05;
 
 // parameters of the collision force
 const FLOAT collision_force_multiplier = 10;
@@ -85,9 +85,9 @@ PLANE wall[] = {
 	,{ {0,1,0}, {0,1,0} }	/* rear */
 };
 
-//const int num_walls = sizeof(wall) / sizeof(PLANE);
+const int num_walls = sizeof(wall) / sizeof(PLANE);
 /* or the floor (bottom) only */
-const int num_walls = 1;
+//const int num_walls = 1;
 
 /* -------------------------------------------------------------- */
 

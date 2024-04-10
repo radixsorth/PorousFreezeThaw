@@ -1,1 +1,1 @@
-spheres_100_sparse.c
+spheres_friction.c

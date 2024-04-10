@@ -30,6 +30,13 @@ const FLOAT h0 = 1.0+r;
 const FLOAT R = 1.0;
 // final time
 const FLOAT T = 8.0;
+
+// initial conditions (definitions are below)
+void icond_sparse(FLOAT * y, FLOAT *color);
+void icond_dense(FLOAT * y, FLOAT *color);
+// choose the initial condition here:
+void (*icond)(FLOAT * y, FLOAT *color) = icond_dense;
+
 // coefficient of restitution
 const FLOAT COR = 0.4;
 // focusing of the transition from full force when the collision is in its
@@ -72,14 +79,15 @@ typedef struct {
 PLANE wall[] = {
 	 { {0,0,0}, {0,0,-1} }	/* bottom */
 	,{ {0,0,0}, {-1,0,0} }	/* left */
-//	,{ {1,0,0}, {1,0,0} }	/* right */
+	,{ {1,0,0}, {1,0,0} }	/* right */
+//	,{ {1,0,0}, {1,0,-1} }	/* right - inclined*/
 	,{ {0,0,0}, {0,-1,0} }	/* front */
 	,{ {0,1,0}, {0,1,0} }	/* rear */
 };
 
-const int num_walls = sizeof(wall) / sizeof(PLANE);
+//const int num_walls = sizeof(wall) / sizeof(PLANE);
 /* or the floor (bottom) only */
-//const int num_walls = 1;
+const int num_walls = 1;
 
 /* -------------------------------------------------------------- */
 
@@ -129,47 +137,47 @@ FLOAT randF()
 
 /* vector arithmetic functions */
 
-inline void vmov(FLOAT *a, const FLOAT *b)
+static inline void vmov(FLOAT *a, const FLOAT *b)
 {
 	a[0] = b[0];
 	a[1] = b[1];
 	a[2] = b[2];
 }
 
-inline void vadd(FLOAT * a, const FLOAT * b)
+static inline void vadd(FLOAT * a, const FLOAT * b)
 {
 	a[0] += b[0];
 	a[1] += b[1];
 	a[2] += b[2];
 }
 
-inline void vsub(FLOAT * a, const FLOAT * b)
+static inline void vsub(FLOAT * a, const FLOAT * b)
 {
 	a[0] -= b[0];
 	a[1] -= b[1];
 	a[2] -= b[2];
 }
 
-inline void vmult(FLOAT * a, const FLOAT b)
+static inline void vmult(FLOAT * a, const FLOAT b)
 {
 	a[0] *= b;
 	a[1] *= b;
 	a[2] *= b;
 }
 
-inline void vmadd(FLOAT * a, const FLOAT b, const FLOAT *c)
+static inline void vmadd(FLOAT * a, const FLOAT b, const FLOAT *c)
 {
 	a[0] += b*c[0];
 	a[1] += b*c[1];
 	a[2] += b*c[2];
 }
 
-inline FLOAT dot(const FLOAT *a, const FLOAT *b)
+static inline FLOAT dot(const FLOAT *a, const FLOAT *b)
 {
 	return( a[0]*b[0] + a[1]*b[1] + a[2]*b[2] );
 }
 
-inline FLOAT norm(const FLOAT *a)
+static inline FLOAT norm(const FLOAT *a)
 {
 	return( sqrtF(dot(a,a)) );
 }
@@ -178,7 +186,7 @@ inline FLOAT norm(const FLOAT *a)
 
 FLOAT kin_energy_fraction;		/* =COR^2 ... initialized in main() */
 
-inline FLOAT rebound(FLOAT v)
+static inline FLOAT rebound(FLOAT v)
 /*
 a smooth version of a function that basically returns
 1 for v>0
@@ -188,7 +196,7 @@ kin_energy_fraction for v<0
     return( kin_energy_fraction + 0.5*(1.0-kin_energy_fraction)*(1.0+tanh(v*dissipation_focusing)) );
 }
 
-inline FLOAT collision_factor(FLOAT surface_distance)
+static inline FLOAT collision_factor(FLOAT surface_distance)
 /*
 a collision force factor depending on the distance of the surfaces of the colliding objects
 */
@@ -196,7 +204,7 @@ a collision force factor depending on the distance of the surfaces of the collid
    return( collision_force_multiplier * expF(-(collision_force_exponent*(surface_distance)/r)) );
 }
 
-inline FLOAT friction_factor(FLOAT x)
+static inline FLOAT friction_factor(FLOAT x)
 /* Sshape (sigma-limiter) based force limiter */
 {
 	static const FLOAT p_eps1 = 0.01;
@@ -309,6 +317,63 @@ RK_RightHandSide m_rhs()
 
 /* -------------------------------------------------------------- */
 
+/* versions of the initial conditions */
+
+void icond_sparse(FLOAT * y, FLOAT *color)
+{
+	FLOAT * pos = y;
+	FLOAT * vel = y + 3*n;
+	FLOAT zero_vector[3] = {0,0,0};
+
+	int i;
+	/* initial positions and velocities */
+	for(i=0;i<n;i++) {
+		VEC(pos,i)[0] = r+(R-2*r)*randF();
+		VEC(pos,i)[1] = r+(R-2*r)*randF();
+		VEC(pos,i)[2] = h0+2.0*r*i;
+
+		/* z coordinate used as color */
+		color[i] = VEC(pos,i)[2];
+
+		vmov(VEC(vel,i), zero_vector);
+	}
+}
+
+void icond_dense(FLOAT * y, FLOAT *color)
+{
+	FLOAT * pos = y;
+	FLOAT * vel = y + 3*n;
+	FLOAT zero_vector[3] = {0,0,0};
+
+	int i;
+
+	int balls_per_row = floor(R/(2.5*r));
+	FLOAT distance = R/balls_per_row;
+	int zi=1, yi=1, xi=1;
+
+	for(i=0;i<n;i++) {
+		/* initialize initial positions of the spheres in a jittered grid */
+		VEC(pos,i)[0] = (xi-0.5)*distance + 0.25*r*randF();
+		VEC(pos,i)[1] = (yi-0.5)*distance + 0.25*r*randF();
+		VEC(pos,i)[2] = h0 + (zi-0.5)*distance + 0.25*r*randF();
+
+		xi++;
+		if(xi>balls_per_row) {
+			xi = 1; yi++;
+			if(yi>balls_per_row) {
+				yi = 1; zi ++;
+			}
+		}	
+
+		/* z coordinate used as color */
+		color[i] = VEC(pos,i)[2];
+
+		vmov(VEC(vel,i), zero_vector);
+	}
+}
+
+/* -------------------------------------------------------------- */
+
 	
 int main(int argc, char *argv[])
 {
@@ -354,23 +419,18 @@ int main(int argc, char *argv[])
 	
 	
 	FLOAT y[6*n];	/* the solution */
-	FLOAT * pos = y;
-	FLOAT * vel = y + 3*n;
-	FLOAT zero_vector[3] = {0,0,0};
 	FLOAT color[n];	/* a constant scalar value to be mapped to the color of each of the spheres */
 	
 	printf("Initializing...\n");
-	int i;
-	/* initial positions and velocities */
-	for(i=0;i<n;i++) {
-		VEC(pos,i)[0] = r+(R-2*r)*randF();
-		VEC(pos,i)[1] = r+(R-2*r)*randF();
-		VEC(pos,i)[2] = h0+2.0*r*i;
+	icond(y,color);
 
-		/* z coordinate used as color */
-		color[i] = VEC(pos,i)[2];
-
-		vmov(VEC(vel,i), zero_vector);
+	/* normalize the normal vectors of all planes */
+	{
+		FLOAT nrm;
+		for(q=0;q<num_walls;q++) {
+			nrm = norm(wall[q].n);
+			vmult(wall[q].n, 1.0/nrm);
+		}
 	}
 
 	int chunk_start[1] = { 0 };
@@ -434,7 +494,7 @@ int main(int argc, char *argv[])
 
 				/* for compatibility with MATLAB code, the numbering starts from 1*/
 				printf("Saving snapshot %d of %d.\n", snap+1, snapshots);
-				save_snapshot(snap+1, pos, color);
+				save_snapshot(snap+1, y, color);
 			} else {
 				;	// currently, MPI parallelization is not supported
 			}

@@ -31,14 +31,14 @@ const FLOAT R = 1.0;
 // final time
 const FLOAT T = 8.0;
 // coefficient of restitution
-const FLOAT COR = 0.1;
+const FLOAT COR = 0.5;
 // focusing of the transition from full force when the collision is in its
 // first (approaching) phase and the reduced force when the collision is in
 // its second (separation) phase. The higher the value, the thinner is
 // the transition (see the rebound() function)
 const FLOAT dissipation_focusing = 10;
 
-const FLOAT friction = 0.5;
+const FLOAT friction = 0.1;
 
 // parameters of the collision force
 const FLOAT collision_force_multiplier = 10;
@@ -179,6 +179,17 @@ a collision force factor depending on the distance of the surfaces of the collid
    return( collision_force_multiplier * expF(-(collision_force_exponent*(surface_distance)/r)) );
 }
 
+inline FLOAT friction_factor(FLOAT x)
+/* Sshape (sigma-limiter) based force limiter */
+{
+	static const FLOAT p_eps1 = 0.01;
+
+	static const FLOAT eps2_3 = 3.0 / (p_eps1*p_eps1);
+	static const FLOAT eps3_2 = 2.0 / (p_eps1*p_eps1*p_eps1);
+
+    if(x >= p_eps1) return ( 1.0 );
+    return ( x*x*(eps2_3 - eps3_2*x) );
+}
 
 void rhs(FLOAT t,const FLOAT * y, FLOAT * dy_dt)
 /*
@@ -187,7 +198,7 @@ the right hand side of the equation system
 {
 	int i,j;
 	FLOAT mp[3], mv[3], mv_tangent[3];
-	FLOAT distance, heading, CF;
+	FLOAT distance, heading, CF, mv_tangent_magnitude;
 	// human-understandable aliases for the portions of the arrays y and dy_dt
 	const FLOAT * pos = y;
 	const FLOAT * vel = y + 3*n;
@@ -215,15 +226,19 @@ the right hand side of the equation system
 			vmov(mv, VEC(vel,j));
 			vsub(mv, VEC(vel,i));
 			// derivative of mutual distance w.r.t. time
-            		// (shows if the particles are moving toward or away from each other)
-            		//heading = 2 * dot(mp,mv);
-            		heading = dot(mp,mv);
+			// (shows if the particles are moving toward or away from each other)
+			//heading = 2 * dot(mp,mv);
+			heading = dot(mp,mv);
 			CF = collision_factor(distance-2*r);
+			// tangential mutual velocity
+			vmov(mv_tangent, VEC(vel,i));
+			vmadd(mv_tangent, -heading, mp);
+			// normalize tangential velocity
+			mv_tangent_magnitude = norm(mv_tangent) + ZERO;
+			vmult(mv_tangent, 1.0/mv_tangent_magnitude);
 			// sum up the acceleration of the i-th particle induced by the j-th particle
-			// (tangential component of the mutual velocity is not calculated explicitly
-			// as the frictional forces are split directly into the directions mp & mv)
-			vmadd(VEC(acc,i), - CF * (rebound(-heading) + heading*friction), mp);
-			vmadd(VEC(acc,i), CF*friction, mv);
+			vmadd(VEC(acc,i), - CF * rebound(-heading), mp);
+			vmadd(VEC(acc,i), - CF * friction * friction_factor(mv_tangent_magnitude), mv_tangent);
 		}
 		
 		// repulsive forces at vessel walls
@@ -233,8 +248,11 @@ the right hand side of the equation system
 		// tangential mutual velocity
 		vmov(mv_tangent, VEC(vel,i));
 		vmadd(mv_tangent, -dot(VEC(vel,i),DOWN), DOWN);
-        	vmadd(VEC(acc,i), rebound(-VEC(vel,i)[2]) * CF, UP);
-		vmadd(VEC(acc,i), - CF * friction, mv_tangent);
+		// normalize tangential velocity
+		mv_tangent_magnitude = norm(mv_tangent) + ZERO;
+		vmult(mv_tangent, 1.0/mv_tangent_magnitude);
+       	vmadd(VEC(acc,i), rebound(-VEC(vel,i)[2]) * CF, UP);
+		vmadd(VEC(acc,i), - CF * friction * friction_factor(mv_tangent_magnitude), mv_tangent);
         	// left
         	//distance = VEC(pos,i)[0];
         	//vmadd(VEC(acc,i), rebound(-VEC(vel,i)[0]) * collision_factor(distance-r), EAST);

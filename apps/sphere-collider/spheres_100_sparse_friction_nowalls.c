@@ -21,7 +21,7 @@ C version with OpenMP parallel processing
 /* -------------------------------------------------------------- */
 
 // number of spheres
-const int n = 100;
+const int n = 200;
 // sphere radius
 const FLOAT r = 0.1;
 // initial height of the lowest sphere
@@ -31,7 +31,7 @@ const FLOAT R = 1.0;
 // final time
 const FLOAT T = 8.0;
 // coefficient of restitution
-const FLOAT COR = 0.5;
+const FLOAT COR = 0.4;
 // focusing of the transition from full force when the collision is in its
 // first (approaching) phase and the reduced force when the collision is in
 // its second (separation) phase. The higher the value, the thinner is
@@ -59,6 +59,30 @@ const char * filename_format = "OUTPUT/%s_%03d.csv";
 
 // regularization
 const FLOAT ZERO = 1e-8;
+
+/* -------------------------------------------------------------- */
+
+// walls definition
+
+typedef struct {
+	FLOAT P[3];		/* reference point*/
+	FLOAT n[3];		/* normal vector */
+} PLANE;
+
+PLANE wall[] = {
+	 { {0,0,0}, {0,0,-1} }	/* bottom */
+	,{ {0,0,0}, {-1,0,0} }	/* left */
+//	,{ {1,0,0}, {1,0,0} }	/* right */
+	,{ {0,0,0}, {0,-1,0} }	/* front */
+	,{ {0,1,0}, {0,1,0} }	/* rear */
+};
+
+const int num_walls = sizeof(wall) / sizeof(PLANE);
+/* or the floor (bottom) only */
+//const int num_walls = 1;
+
+/* -------------------------------------------------------------- */
+
 
 /* -------------------------------------------------------------- */
 
@@ -100,13 +124,6 @@ FLOAT randF()
 {
 	return(((FLOAT)rand()) / ((FLOAT)RAND_MAX));
 }
-
-FLOAT UP[3] = { 0, 0, 1 };
-FLOAT DOWN[3] = { 0, 0, -1 };
-FLOAT EAST[3] = { 1, 0, 0 };
-FLOAT WEST[3] = { -1, 0, 0 };
-FLOAT NORTH[3] = { 0, 1, 0 };
-FLOAT SOUTH[3] = { 0, -1, 0 };
 
 #define VEC(arg,i) (arg+3*(i))
 
@@ -217,54 +234,52 @@ the right hand side of the equation system
 		// repulsive & frictional forces between all particle pairs
 		for(j=0;j<n;j++) {
 			if(i==j) continue;
-			// mutual position (j-th w.r.t. i-th particle)
-			vmov(mp, VEC(pos,j));
-			vsub(mp, VEC(pos,i));
+			// mutual position (i-th w.r.t. j-th particle)
+			vmov(mp, VEC(pos,i));
+			vsub(mp, VEC(pos,j));
 			distance = norm(mp) + ZERO;
-			vmult(mp, 1.0/distance);
-			// mutual velocity
-			vmov(mv, VEC(vel,j));
-			vsub(mv, VEC(vel,i));
-			// derivative of mutual distance w.r.t. time
-			// (shows if the particles are moving toward or away from each other)
-			//heading = 2 * dot(mp,mv);
-			heading = dot(mp,mv);
 			CF = collision_factor(distance-2*r);
+			// normalize mutual position for further use
+			vmult(mp, 1.0/distance);
+			// mutual velocity (of i-th particle w.r.t. j-th particle)
+			vmov(mv, VEC(vel,i));
+			vsub(mv, VEC(vel,j));
+			// derivative of mutual distance w.r.t. time (or projection of mv into the direction mp)
+			// (shows if the particles are moving toward or away from each other)
+			heading = dot(mv,mp);
 			// tangential mutual velocity
-			vmov(mv_tangent, VEC(vel,i));
+			vmov(mv_tangent, mv);
 			vmadd(mv_tangent, -heading, mp);
 			// normalize tangential velocity
 			mv_tangent_magnitude = norm(mv_tangent) + ZERO;
 			vmult(mv_tangent, 1.0/mv_tangent_magnitude);
-			// sum up the acceleration of the i-th particle induced by the j-th particle
-			vmadd(VEC(acc,i), - CF * rebound(-heading), mp);
+			// add the acceleration of the i-th particle induced by the j-th particle:
+			// 1) repulsive force
+			vmadd(VEC(acc,i), CF * rebound(-heading), mp);
+			// 2) frictional force
 			vmadd(VEC(acc,i), - CF * friction * friction_factor(mv_tangent_magnitude), mv_tangent);
 		}
 		
-		// repulsive forces at vessel walls
-		// bottom
-        	distance = VEC(pos,i)[2];
-		CF = collision_factor(distance-r);
-		// tangential mutual velocity
-		vmov(mv_tangent, VEC(vel,i));
-		vmadd(mv_tangent, -dot(VEC(vel,i),DOWN), DOWN);
-		// normalize tangential velocity
-		mv_tangent_magnitude = norm(mv_tangent) + ZERO;
-		vmult(mv_tangent, 1.0/mv_tangent_magnitude);
-       	vmadd(VEC(acc,i), rebound(-VEC(vel,i)[2]) * CF, UP);
-		vmadd(VEC(acc,i), - CF * friction * friction_factor(mv_tangent_magnitude), mv_tangent);
-        	// left
-        	//distance = VEC(pos,i)[0];
-        	//vmadd(VEC(acc,i), rebound(-VEC(vel,i)[0]) * collision_factor(distance-r), EAST);
-        	// right
-        	//distance = R - VEC(pos,i)[0];
-        	//vmadd(VEC(acc,i), rebound(VEC(vel,i)[0]) * collision_factor(distance-r), WEST);
-        	// front
-        	//distance = VEC(pos,i)[1];
-        	//vmadd(VEC(acc,i), rebound(-VEC(vel,i)[1]) * collision_factor(distance-r), NORTH);
-        	// rear
-        	//distance = R - VEC(pos,i)[1];
-        	//vmadd(VEC(acc,i), rebound(VEC(vel,i)[1]) * collision_factor(distance-r), SOUTH);
+		// repulsive & frictional forces at the walls
+		for(j=0;j<num_walls;j++) {
+			// position w.r.t. the wall reference point
+			vmov(mp,VEC(pos,i));
+			vsub(mp,wall[j].P);
+			distance = fabsF(dot(mp,wall[j].n));
+			CF = collision_factor(distance-r);
+			// velocity toward (!) the wall
+			heading = dot(VEC(vel,i),wall[j].n);
+			// tangential mutual velocity
+			vmov(mv_tangent, VEC(vel,i));
+			vmadd(mv_tangent, -heading, wall[j].n);
+			// normalize tangential velocity
+			mv_tangent_magnitude = norm(mv_tangent) + ZERO;
+			vmult(mv_tangent, 1.0/mv_tangent_magnitude);
+			// add repulsive force
+			vmadd(VEC(acc,i), - CF * rebound(heading), wall[j].n);
+			// add frictional force
+			vmadd(VEC(acc,i), - CF * friction * friction_factor(mv_tangent_magnitude), mv_tangent);
+		}
 	}
 }
 

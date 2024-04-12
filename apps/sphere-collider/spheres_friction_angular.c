@@ -20,8 +20,8 @@ C version with OpenMP parallel processing
 
 /* -------------------------------------------------------------- */
 
-// number of spheres
-const int n = 2;
+// number of spheres (not constant, as it can be overriden (only decreased) by the initial condition)
+int n = 200;
 // sphere radius
 const FLOAT r = 0.1;
 // initial height of the lowest sphere
@@ -32,10 +32,11 @@ const FLOAT R = 1.0;
 const FLOAT T = 8.0;
 
 // initial conditions (definitions are below)
-void icond_sparse(FLOAT * y, FLOAT *color);
-void icond_dense(FLOAT * y, FLOAT *color);
+void icond_2spheres(FLOAT **y_ptr, FLOAT **color_ptr);
+void icond_sparse(FLOAT **y_ptr, FLOAT **color_ptr);
+void icond_dense(FLOAT **y_ptr, FLOAT **color_ptr);
 // choose the initial condition here:
-void (*icond)(FLOAT * y, FLOAT *color) = icond_sparse;
+void (*icond)(FLOAT **, FLOAT **) = icond_dense;
 
 // coefficient of restitution
 const FLOAT COR = 0.4;
@@ -45,14 +46,18 @@ const FLOAT COR = 0.4;
 // the transition (see the rebound() function)
 const FLOAT dissipation_focusing = 10;
 
-const FLOAT friction = 0.2;
+// friction coefficient
+const FLOAT friction = 0.1;
+
+// friction factor reducing the forces when mutual surface velocity is less than p_eps1
+const FLOAT p_eps1 = 0.01;
 
 // parameters of the collision force
 const FLOAT collision_force_multiplier = 10;
 const FLOAT collision_force_exponent = 15;
 
-// gravity acceleration
-const FLOAT g[3] = {0, 0, -9.81};
+// gravity acceleration (not constant, as it can be overriden by the initial condition)
+FLOAT g[3] = {0, 0, 0 -9.81};
 
 // RK setup
 const FLOAT ht = 0.1;			/* initial time step */
@@ -79,8 +84,8 @@ typedef struct {
 PLANE wall[] = {
 	 { {0,0,0}, {0,0,-1} }	/* bottom */
 	,{ {0,0,0}, {-1,0,0} }	/* left */
-//	,{ {1,0,0}, {1,0,0} }	/* right */
-	,{ {1,0,0}, {1,0,-1} }	/* right - inclined*/
+	,{ {1,0,0}, {1,0,0} }	/* right */
+//	,{ {1,0,0}, {1,0,-1} }	/* right - inclined*/
 	,{ {0,0,0}, {0,-1,0} }	/* front */
 	,{ {0,1,0}, {0,1,0} }	/* rear */
 };
@@ -94,7 +99,8 @@ const int num_walls = sizeof(wall) / sizeof(PLANE);
 /* constants */
 
 const FLOAT zero_vector[3] = {0,0,0};
-/* moment of inertia */
+
+/* moment of inertia of a unit-mass solid ball */
 const FLOAT I = 2.0 / 5.0 * r * r;
 
 /* -------------------------------------------------------------- */
@@ -205,7 +211,7 @@ a smooth version of a function that basically returns
 kin_energy_fraction for v<0
 */
 {
-    return( kin_energy_fraction + 0.5*(1.0-kin_energy_fraction)*(1.0+tanh(v*dissipation_focusing)) );
+	return( kin_energy_fraction + 0.5*(1.0-kin_energy_fraction)*(1.0+tanh(v*dissipation_focusing)) );
 }
 
 static inline FLOAT collision_factor(FLOAT surface_distance)
@@ -213,19 +219,19 @@ static inline FLOAT collision_factor(FLOAT surface_distance)
 a collision force factor depending on the distance of the surfaces of the colliding objects
 */
 {
-   return( collision_force_multiplier * expF(-(collision_force_exponent*(surface_distance)/r)) );
+	return( collision_force_multiplier * expF(-(collision_force_exponent*(surface_distance)/r)) );
 }
 
 static inline FLOAT friction_factor(FLOAT x)
-/* Sshape (sigma-limiter) based force limiter */
+/* Sshape (sigma-limiter) based force multiplication factor ensuring that friction vanishes as mutual velocity goes to zero */
 {
 	static const FLOAT p_eps1 = 0.01;
 
 	static const FLOAT eps2_3 = 3.0 / (p_eps1*p_eps1);
 	static const FLOAT eps3_2 = 2.0 / (p_eps1*p_eps1*p_eps1);
 
-    if(x >= p_eps1) return ( 1.0 );
-    return ( x*x*(eps2_3 - eps3_2*x) );
+	if(x >= p_eps1) return ( 1.0 );
+	return ( x*x*(eps2_3 - eps3_2*x) );
 }
 
 void rhs(FLOAT t,const FLOAT * y, FLOAT * dy_dt)
@@ -272,7 +278,7 @@ the right hand side of the equation system
 			// derivative of mutual distance w.r.t. time (or projection of mv into the direction mp)
 			// (shows if the particles are moving toward or away from each other)
 			heading = dot(mv,mp);
-			// tangential mutual velocity
+			// tangential mutual velocity (of the center of the i-th particle w.r.t. j-th particle)
 			vmov(mv_tangent, mv);
 			vmadd(mv_tangent, -heading, mp);
 			
@@ -280,12 +286,13 @@ the right hand side of the equation system
 			Note: as long as r is the same for all spheres, one could simplify this to first sum
 			both angular velocities and then perform the vector product.
 			*/
-			// account for surface velocity of rotation of i-th sphere
+			// account for surface velocity of rotation of i-th sphere v_tangent = \vec{omega} \times \vec{r}
+			// note that mp points in the OPPOSITE direction than \vec{r}, which is the vector from particle center to the point of contact at the surface
 			cross(sv, VEC(angvel,i), mp);
-			vmadd(mv_tangent, r, sv);
+			vmadd(mv_tangent, -r, sv);
 			// account for surface velocity of rotation of j-th sphere
 			cross(sv, VEC(angvel,j), mp);
-			vmadd(mv_tangent, r, sv);
+			vmadd(mv_tangent, -r, sv);
 
 			// normalize tangential velocity
 			mv_tangent_magnitude = norm(mv_tangent) + ZERO;
@@ -294,12 +301,15 @@ the right hand side of the equation system
 			// 1) repulsive force
 			vmadd(VEC(acc,i), CF * rebound(-heading), mp);
 			// 2) frictional force: calculate the magnitude
-			FF = - CF * friction * friction_factor(mv_tangent_magnitude);
-			// ... apply linear impulse
-			vmadd(VEC(acc,i), FF , mv_tangent);
+			FF = CF * friction * friction_factor(mv_tangent_magnitude);
+			// ... apply linear impulse (in the direction opposite to mv_tangent!)
+			vmadd(VEC(acc,i), -FF , mv_tangent);
 			// ... apply angular impulse
-			cross(torque, mp, mv_tangent);	// the real torque is tau = r x F, but we need to postpone the multiplications by scalars to the next line
-			vmadd(VEC(angacc,i), -r*FF/I, torque);
+			// the formula for torque is \tau = \vec{r} \times \vec{F}, but we need to postpone the multiplications by scalars to the next line
+			// Note that mv_tangent points in the opposite direction than the tangential force, but so does mp with respect to \vec{r},
+			// so the below cross product calculates the torque with the correct orientation.
+			cross(torque, mp, mv_tangent);
+			vmadd(VEC(angacc,i), r*FF/I, torque);
 		}
 		
 		// repulsive & frictional forces at the walls
@@ -311,10 +321,11 @@ the right hand side of the equation system
 			CF = collision_factor(distance-r);
 			// velocity toward (!) the wall
 			heading = dot(VEC(vel,i),wall[j].n);
-			// tangential mutual velocity
+			// tangential mutual velocity of the particle w.r.t. the wall surface
 			vmov(mv_tangent, VEC(vel,i));
 			vmadd(mv_tangent, -heading, wall[j].n);
 			// account for surface velocity of rotation of i-th sphere
+			// note that here wall[j].n points in the SAME direction than \vec{r}
 			cross(sv, VEC(angvel,i), wall[j].n);
 			vmadd(mv_tangent, r, sv);
 			// normalize tangential velocity
@@ -323,31 +334,36 @@ the right hand side of the equation system
 			// apply repulsive force
 			vmadd(VEC(acc,i), - CF * rebound(heading), wall[j].n);
 			// calculate magnitude of the frictional force
-			FF = - CF * friction * friction_factor(mv_tangent_magnitude);
-			// apply linear impulse of the frictional force
-			vmadd(VEC(acc,i), FF, mv_tangent);
+			FF = CF * friction * friction_factor(mv_tangent_magnitude);
+			// apply linear impulse of the frictional force (in the direction opposite to mv_tangent!)
+			vmadd(VEC(acc,i), -FF, mv_tangent);
 			// apply angular impulse of the frictional force
 			cross(torque, wall[j].n, mv_tangent);
-			vmadd(VEC(angacc,i), r*FF/I, torque);
+			vmadd(VEC(angacc,i), -r*FF/I, torque);	// here, the minus sign must compensate the orientation of mv_tangent
 		}
 	}
 }
 
 
-int save_snapshot(int snap, FLOAT *pos, FLOAT * color)
-/* saves the particle positions "pos" & scalar color "color" to snapshot with number "snap" */
+int save_snapshot(int snap, FLOAT *y, FLOAT * color)
+/* saves the particle-related quantities & scalar color "color" to snapshot with number "snap" */
 {
 	FILE * f;
 	int i;
 	char filename[1024];
+
+	FLOAT * pos = y;
+	FLOAT * vel = y + 3*n;
+	FLOAT * angvel = y + 6*n;
+
 	sprintf(filename, filename_format, filename_base, snap);
 	f = fopen(filename,"w");
 	if(f == NULL) return(-1);
 	// output header
-	fprintf(f,"x,y,z,color\n");
+	fprintf(f,"x,y,z,vx,vy,vz,avx,avy,avz,color\n");
 	// output particle positions & (scalar) particle color
 	for(i=0;i<n;i++)
-		fprintf(f,"%f,%f,%f,%f\n", VEC(pos,i)[0], VEC(pos,i)[1], VEC(pos,i)[2], color[i]);
+		fprintf(f,"%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n", VEC(pos,i)[0], VEC(pos,i)[1], VEC(pos,i)[2], VEC(vel,i)[0], VEC(vel,i)[1], VEC(y,i)[2], VEC(angvel,i)[0], VEC(angvel,i)[1], VEC(angvel,i)[2], color[i]);
 	fclose(f);
 }
 
@@ -361,18 +377,58 @@ RK_RightHandSide m_rhs()
 
 /* versions of the initial conditions */
 
-void icond_sparse(FLOAT * y, FLOAT *color)
+void alloc_data(FLOAT **y_ptr, FLOAT **color_ptr)
 {
-	FLOAT * pos = y;
-	FLOAT * vel = y + 3*n;
-	FLOAT * angvel = y + 6*n;
+	*y_ptr = (FLOAT *)malloc(9*n*sizeof(FLOAT));
+	*color_ptr = (FLOAT *)malloc(n*sizeof(FLOAT));
+}
+
+void icond_2spheres(FLOAT **y_ptr, FLOAT **color_ptr)
+{
+	n = 2;	/* force only 2 particles */
+	vmov(g,zero_vector);	/* no gravity acceleration */
+
+	alloc_data(y_ptr, color_ptr);
+
+	FLOAT * pos = *y_ptr;
+	FLOAT * vel = pos + 3*n;
+	FLOAT * angvel = vel + 3*n;
+	FLOAT * color = *color_ptr;
+
 	FLOAT a[3] = {0,100,0};
+	FLOAT v0[3] = {0,0,-1};
 
 	int i;
 	/* initial positions and velocities */
 	for(i=0;i<n;i++) {
-		VEC(pos,i)[0] = 0.5; // r+(R-2*r)*randF();
-		VEC(pos,i)[1] = 0.5; // r+(R-2*r)*randF();
+		VEC(pos,i)[0] = 0.45+1.2*r*i; // 0.5;
+		VEC(pos,i)[1] = 0.5;
+		VEC(pos,i)[2] = h0+5.0*r*i;
+
+		/* z coordinate used as color */
+		color[i] = VEC(pos,i)[2];
+
+		vmov(VEC(vel,i), zero_vector);
+		vmov(VEC(angvel,i), zero_vector);
+	}
+	vmov(VEC(vel,1),v0);
+	//vmov(VEC(angvel,1), a);
+}
+
+void icond_sparse(FLOAT **y_ptr, FLOAT **color_ptr)
+{
+	alloc_data(y_ptr, color_ptr);
+
+	FLOAT * pos = *y_ptr;
+	FLOAT * vel = pos + 3*n;
+	FLOAT * angvel = vel + 3*n;
+	FLOAT * color = *color_ptr;
+
+	int i;
+	/* initial positions and velocities */
+	for(i=0;i<n;i++) {
+		VEC(pos,i)[0] = r+(R-2*r)*randF();
+		VEC(pos,i)[1] = r+(R-2*r)*randF();
 		VEC(pos,i)[2] = h0+2.0*r*i;
 
 		/* z coordinate used as color */
@@ -380,17 +436,17 @@ void icond_sparse(FLOAT * y, FLOAT *color)
 
 		vmov(VEC(vel,i), zero_vector);
 		vmov(VEC(angvel,i), zero_vector);
-		vmov(VEC(angvel,i), a);
-		vmult(VEC(angvel,i),i);
-
 	}
 }
 
-void icond_dense(FLOAT * y, FLOAT *color)
+void icond_dense(FLOAT **y_ptr, FLOAT **color_ptr)
 {
-	FLOAT * pos = y;
-	FLOAT * vel = y + 3*n;
-	FLOAT * angvel = y + 6*n;
+	alloc_data(y_ptr, color_ptr);
+
+	FLOAT * pos = *y_ptr;
+	FLOAT * vel = pos + 3*n;
+	FLOAT * angvel = vel + 3*n;
+	FLOAT * color = *color_ptr;
 
 	int i;
 
@@ -466,11 +522,11 @@ int main(int argc, char *argv[])
 	srand(time(NULL)+101009*MPIrank);
 	
 	
-	FLOAT y[9*n];	/* the solution */
-	FLOAT color[n];	/* a constant scalar value to be mapped to the color of each of the spheres */
+	FLOAT * y;		/* the solution - allocated from within icond() */
+	FLOAT * color;	/* a constant scalar value to be mapped to the color of each of the spheres */
 	
-	printf("Initializing...\n");
-	icond(y,color);
+	if(MPIrank==0) printf("Initializing...\n");
+	icond(&y, &color);
 
 	/* normalize the normal vectors of all planes */
 	{

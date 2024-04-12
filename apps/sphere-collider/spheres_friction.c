@@ -45,7 +45,7 @@ const FLOAT COR = 0.4;
 // the transition (see the rebound() function)
 const FLOAT dissipation_focusing = 10;
 
-const FLOAT friction = 0.05;
+const FLOAT friction = 0.1;
 
 // parameters of the collision force
 const FLOAT collision_force_multiplier = 10;

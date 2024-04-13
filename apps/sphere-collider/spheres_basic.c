@@ -49,6 +49,9 @@ const FLOAT dissipation_focusing = 10;
 const FLOAT collision_force_multiplier = 10;
 const FLOAT collision_force_exponent = 15;
 
+// maximum surface distance of interaction
+const FLOAT max_surf_dist = r;
+
 // gravity acceleration
 const FLOAT g[3] = {0, 0, -9.81};
 
@@ -244,9 +247,13 @@ the right hand side of the equation system
 			vmov(mp, VEC(pos,i));
 			vsub(mp, VEC(pos,j));
 			distance = norm(mp) + ZERO;
-			CF = collision_factor(distance-2*r);
 			// normalize mutual position for further use
 			vmult(mp, 1.0/distance);
+			// calculate the distance between surfaces
+			distance -= 2*r;
+			// ignore spheres that are too far away
+			if(distance > max_surf_dist) continue;
+			CF = collision_factor(distance);
 			// mutual velocity (of i-th particle w.r.t. j-th particle)
 			vmov(mv, VEC(vel,i));
 			vsub(mv, VEC(vel,j));
@@ -262,8 +269,11 @@ the right hand side of the equation system
 			// position w.r.t. the wall reference point
 			vmov(mp,VEC(pos,i));
 			vsub(mp,wall[j].P);
-			distance = fabsF(dot(mp,wall[j].n));
-			CF = collision_factor(distance-r);
+			// calculate the distance between surfaces
+			distance = fabsF(dot(mp,wall[j].n)) - r;
+			// ignore the walls that are too far away
+			if(distance > max_surf_dist) continue;
+			CF = collision_factor(distance);
 			// velocity toward (!) the wall
 			heading = dot(VEC(vel,i),wall[j].n);
 			// add repulsive force

@@ -31,9 +31,9 @@ function eps_s = epss(r, snapshot, from, to, res)
     sphere_count = size(pos,1);
     hits = 0;
     
-    for z=linspace(from(3),to(3),res)
-        for y=linspace(from(2),to(2),res)
-            for x=linspace(from(1),to(1),res)
+    for z=from(3)+((0:res-1)+0.5)*(to(3)-from(3))/res
+        for y=from(2)+((0:res-1)+0.5)*(to(2)-from(2))/res
+            for x=from(1)+((0:res-1)+0.5)*(to(1)-from(1))/res
                 for b=1:sphere_count
                     if(norm(pos(b,:)-[x y z])<=r)
                         hits = hits+1;

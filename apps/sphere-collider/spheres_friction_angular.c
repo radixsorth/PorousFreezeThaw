@@ -20,7 +20,7 @@ C version with OpenMP parallel processing
 
 /* -------------------------------------------------------------- */
 
-// number of spheres (not constant, as it can be overriden (only decreased) by the initial condition)
+// number of spheres (not constant, as it can be overriden by the initial condition)
 int n = 200;
 // sphere radius
 const FLOAT r = 0.1;

@@ -17,7 +17,7 @@ workspace_snapshot_file = 'spheres_test.mat';
 % number of spheres
 n = 1;
 % sphere radius
-r = 0.5;
+r = 0.1;
 % initial height of the lowest sphere
 h0 = 16.0+r;
 % vessel dimensions
@@ -33,8 +33,8 @@ COR = sqrt(0.5);
 dissipation_focusing = 10;
 
 % parameters of the collision force
-collision_force_multiplier = 100;   % WARNING, THIS IS DIFFERENT THAN IN PRODUCTION !!
-collision_force_exponent = 15;
+collision_force_multiplier = 10;
+collision_force_exponent = 150;
 
 % solver
 ODE_solver = @ode15s;
@@ -130,9 +130,9 @@ end
 function cf = collision_factor(surface_distance)
 % a collision force factor depending on the distance of the surfaces
 % of the colliding objects
-    global r collision_force_multiplier collision_force_exponent
+    global collision_force_multiplier collision_force_exponent
 
-    cf = collision_force_multiplier * exp(-(collision_force_exponent*(surface_distance)/r));
+    cf = collision_force_multiplier * exp(-(collision_force_exponent*surface_distance));
 end
 
 function dy_dt = rhs(t,y)

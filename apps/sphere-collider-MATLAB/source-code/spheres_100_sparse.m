@@ -34,7 +34,7 @@ dissipation_focusing = 10;
 
 % parameters of the collision force
 collision_force_multiplier = 10;
-collision_force_exponent = 15;
+collision_force_exponent = 150;
 
 % solver
 ODE_solver = @ode45;
@@ -130,9 +130,9 @@ end
 function cf = collision_factor(surface_distance)
 % a collision force factor depending on the distance of the surfaces
 % of the colliding objects
-    global r collision_force_multiplier collision_force_exponent
+    global collision_force_multiplier collision_force_exponent
 
-    cf = collision_force_multiplier * exp(-(collision_force_exponent*(surface_distance)/r));
+    cf = collision_force_multiplier * exp(-(collision_force_exponent*surface_distance));
 end
 
 function dy_dt = rhs(t,y)

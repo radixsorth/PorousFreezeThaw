@@ -3,6 +3,8 @@ SPHERES
 simulation of collisions and settling of falling spheres into a vessel
 C version with OpenMP parallel processing
 (C) 2022-2024 Pavel Strachota
+
+version with normal (repulsion) forces and frictional froces, without sphere rotation
 */
 
 #include "RK_MPI_SAsolver.h"	/* this also includes mpi.h */
@@ -45,11 +47,11 @@ const FLOAT COR = 0.4;
 // the transition (see the rebound() function)
 const FLOAT dissipation_focusing = 10;
 
-const FLOAT friction = 0.1;
+const FLOAT friction = 0.2;
 
 // parameters of the collision force
 const FLOAT collision_force_multiplier = 10;
-const FLOAT collision_force_exponent = 15;
+const FLOAT collision_force_exponent = 150;
 
 // maximum surface distance of interaction
 const FLOAT max_surf_dist = r;
@@ -204,7 +206,7 @@ static inline FLOAT collision_factor(FLOAT surface_distance)
 a collision force factor depending on the distance of the surfaces of the colliding objects
 */
 {
-   return( collision_force_multiplier * expF(-(collision_force_exponent*(surface_distance)/r)) );
+	return( collision_force_multiplier * expF(-collision_force_exponent*surface_distance) );
 }
 
 static inline FLOAT friction_factor(FLOAT x)

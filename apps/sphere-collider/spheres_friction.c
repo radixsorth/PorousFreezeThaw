@@ -283,7 +283,7 @@ the right hand side of the equation system
 			vmov(mp,VEC(pos,i));
 			vsub(mp,wall[j].P);
 			// calculate the distance between surfaces
-			distance = fabsF(dot(mp,wall[j].n)) - r;
+			distance = - dot(mp,wall[j].n) - r;
 			// ignore the walls that are too far away
 			if(distance > max_surf_dist) continue;
 			CF = collision_factor(distance);

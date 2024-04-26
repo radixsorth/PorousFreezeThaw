@@ -4,7 +4,8 @@ simulation of collisions and settling of falling spheres into a vessel
 C version with OpenMP parallel processing
 (C) 2022-2024 Pavel Strachota
 
-basic version with normal (repulsion) forces only: linear Walton & Braun model
+basic version with normal (repulsion) forces only:
+linear Walton & Braun model with rebound regularization
 */
 
 #include "RK_MPI_SAsolver.h"	/* this also includes mpi.h */

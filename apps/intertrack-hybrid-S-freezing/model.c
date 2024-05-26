@@ -44,6 +44,7 @@ enum {
 enum {	
 	
 	u_star, L, xi, a, b, alpha, mu,
+	beads_scaling, beads_offset_x, beads_offset_y, beads_offset_z,
 	xi_gl, zeta,
 	p_eps0, p_eps1,
 	/* u_D, */ gamma,
@@ -99,6 +100,12 @@ PARAM_METADATA param_info [] = {
 
 	{ -1,			NULL,			"Glass phase field representation parameters" },
 
+	{ ball_radius,		"ball_radius",		"Radius of all glass beads [m]" },
+	{ beads_scaling,	"beads_scaling",	"Scaling of the glass beads positions" },
+	{ beads_offset_x,	"beads_offset_x",	"Glass beads position offset along the x1 axis"},
+	{ beads_offset_y,	"beads_offset_y",	"Glass beads position offset along the x2 axis"},
+	{ beads_offset_z,	"beads_offset_z",	"Glass beads position offset along the x3 axis"},
+
 	{ xi_gl,		"xi_gl",		"Glass phase interface thickness parameter" },
 	{ zeta,			"zeta",			"Glass phase field multiplier in water indicator" },
 
@@ -126,8 +133,7 @@ PARAM_METADATA param_info [] = {
 	{ top_temp2,		"top_temp2",		"Temperature at the top of the vessel during Phase 2 [K]" },
 	{ phase_switch_time,	"phase_switch_time",	"Time of switchnig from Phase 1 to Phase 2 [s]"},
 
-	{ u_noise_amp,	"u_noise_amp",	"Temperature noise amplitude" },
-	{ ball_radius,	"ball_radius",	"Radius of all glass balls [m]" },
+	{ u_noise_amp,	"u_noise_amp",	"Temperature noise amplitude" }
 };
 
 size_t PARAM_INFO_SIZE = sizeof(param_info) / sizeof(PARAM_METADATA);

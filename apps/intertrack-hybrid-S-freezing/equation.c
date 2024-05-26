@@ -475,8 +475,12 @@ int PrecalculateData(FLOAT * var_eps_mult)
 		if(MPIrank==0) {
 			ball_positions = fopen(ball_positions_file,"r");
 			if(ball_positions != NULL) {
-				for(ball_count=0;ball_count<MAX_BALLS_COUNT;ball_count++)
+				for(ball_count=0;ball_count<MAX_BALLS_COUNT;ball_count++) {
 					if(fscanf(ball_positions, "%" iFTC_g " %" iFTC_g " %" iFTC_g, bx+ball_count, by+ball_count, bz+ball_count) < 3) break;
+					bx[ball_count] = bx[ball_count] * param[beads_scaling] + param[beads_offset_x];
+					by[ball_count] = by[ball_count] * param[beads_scaling] + param[beads_offset_y];
+					bz[ball_count] = bz[ball_count] * param[beads_scaling] + param[beads_offset_z];
+				}
 				fclose(ball_positions);
 
 				/* debug - report ball positions */

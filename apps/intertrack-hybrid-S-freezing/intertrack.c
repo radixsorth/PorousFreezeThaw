@@ -304,7 +304,7 @@ typedef struct
 	char grid_IO_mode;
 
 	FLOAT model_parameters[PARAM_COUNT];
-	char icond_formula[VAR_COUNT][256];
+	char icond_formula[VAR_COUNT][4096];
 } MPI_Calculation;
 
 static FLOAT final_time;
@@ -317,7 +317,7 @@ static char out_file[4096]="";		/* output files path template*/
 static char out_file_suffix[256]="";	/* suffix added to each snapshot pathname (possibly empty) */
 
 /* initial conditions specifications (either math formulae or a path to the dataset containing the initial condition) */
-static char icond_formula[VAR_COUNT][256];	/* initial conditions formulas for all variables */
+static char icond_formula[VAR_COUNT][4096];	/* initial conditions formulas for all variables */
 static char icond_file[4096]="";		/* initial conditions dataset file name (contains both u and p) */
 
 /* debug log / snapshot trigger */
@@ -1299,7 +1299,7 @@ int main(int argc, char *argv[])
 		"\\**************************************************************/\n\n"
 
 		"InterTrack Version %s.%s, Build %d (%s)\n"
-		"(C) 2005-2011, 2015, 2021-2023 Pavel Strachota\n"
+		"(C) 2005-2011, 2015, 2021-2022 Pavel Strachota\n"
 		"****************************************************************\n\n"
 		"syntax: intertrack param_file [master_rank] [ubound_list]\n\n",
 		AVS_MajorVersion(), AVS_MinorVersion(), AVS_Build(), AVS_VersionInfo() );

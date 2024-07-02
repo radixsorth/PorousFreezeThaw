@@ -542,6 +542,10 @@ int PrecalculateData(FLOAT * var_eps_mult)
 				case 2:
 					model = models[calc_mode];
 					break;
+				case 10:
+				case 11:
+					model = models[calc_mode-10];
+					break;
 				default:
 					Mmprintf(logfile,	"\nError : invalid calc_mode value %d\n\n", calc_mode);
 					return(1);
@@ -667,6 +671,7 @@ void f_generic_model01(FLOAT t,const FLOAT * const_w,FLOAT * dw_dt)
 				/* source term */
 				switch(calc_mode) {
 					case 0:
+					case 10:
 						/* GradP model */
 						*dp_dt += f_GradP(u[___]+pr->u_noise, p[___],
 							euclidean_norm(
@@ -677,6 +682,7 @@ void f_generic_model01(FLOAT t,const FLOAT * const_w,FLOAT * dw_dt)
 								);
 						break;
 					case 1:
+					case 11:
 						/* SigmaP1-P model */
 						*dp_dt += f_SigmaP1_P(u[___]+pr->u_noise, p[___]);
 				}
@@ -695,19 +701,27 @@ void f_generic_model01(FLOAT t,const FLOAT * const_w,FLOAT * dw_dt)
 				(e.g. h_{2}h_{3} on the first line).
 				The second 'hi' belongs to the respective difference quotient.
 				*/
-				*du_dt =	(	(
-					/* YZ planes */	  h1_2 * (	- lambda(0.5*(p[m__]+p[___]),0.5*(gl[m__]+gl[___])) * ( - u[m__] + u[___] )
-									+ lambda(0.5*(p[___]+p[p__]),0.5*(gl[___]+gl[p__])) * ( - u[___] + u[p__] )
-							            ) +
-					/* XZ planes */	  h2_2 * (	- lambda(0.5*(p[_m_]+p[___]),0.5*(gl[_m_]+gl[___])) * ( - u[_m_] + u[___] )
-									+ lambda(0.5*(p[___]+p[_p_]),0.5*(gl[___]+gl[_p_])) * ( - u[___] + u[_p_] )
-							            ) +
-					/* XY planes */	  h3_2 * (	- lambda(0.5*(p[__m]+p[___]),0.5*(gl[__m]+gl[___])) * ( - u[__m] + u[___] )
-									+ lambda(0.5*(p[___]+p[__p]),0.5*(gl[___]+gl[__p])) * ( - u[___] + u[__p] )
-							            )
-								) / this_rho	
-								+ param[L] * (*dp_dt)
-							) / this_cp;
+				switch(calc_mode) {
+					case 10:
+					case 11:
+						/* solve the Allen-Cahn equation only, using constant-in-time temperature (equivalent to setting all lambdas and L to zero) */
+						*du_dt = 0.0;
+						break;
+					default:
+						*du_dt =	(	(
+							/* YZ planes */	  h1_2 * (	- lambda(0.5*(p[m__]+p[___]),0.5*(gl[m__]+gl[___])) * ( - u[m__] + u[___] )
+											+ lambda(0.5*(p[___]+p[p__]),0.5*(gl[___]+gl[p__])) * ( - u[___] + u[p__] )
+										) +
+							/* XZ planes */	  h2_2 * (	- lambda(0.5*(p[_m_]+p[___]),0.5*(gl[_m_]+gl[___])) * ( - u[_m_] + u[___] )
+											+ lambda(0.5*(p[___]+p[_p_]),0.5*(gl[___]+gl[_p_])) * ( - u[___] + u[_p_] )
+										) +
+							/* XY planes */	  h3_2 * (	- lambda(0.5*(p[__m]+p[___]),0.5*(gl[__m]+gl[___])) * ( - u[__m] + u[___] )
+											+ lambda(0.5*(p[___]+p[__p]),0.5*(gl[___]+gl[__p])) * ( - u[___] + u[__p] )
+										)
+										) / this_rho	
+										+ param[L] * (*dp_dt)
+									) / this_cp;
+				}
 
 				/*
 				C. compute the right hand side of the glass phase field equation:

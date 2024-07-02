@@ -1299,7 +1299,7 @@ int main(int argc, char *argv[])
 		"\\**************************************************************/\n\n"
 
 		"InterTrack Version %s.%s, Build %d (%s)\n"
-		"(C) 2005-2011, 2015, 2021-2022 Pavel Strachota\n"
+		"(C) 2005-2011, 2015, 2021-2024 Pavel Strachota\n"
 		"****************************************************************\n\n"
 		"syntax: intertrack param_file [master_rank] [ubound_list]\n\n",
 		AVS_MajorVersion(), AVS_MinorVersion(), AVS_Build(), AVS_VersionInfo() );

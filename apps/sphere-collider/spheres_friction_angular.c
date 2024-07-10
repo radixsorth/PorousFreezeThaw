@@ -375,7 +375,7 @@ int save_snapshot(int snap, FLOAT *y, FLOAT * color)
 	fprintf(f,"x,y,z,vx,vy,vz,avx,avy,avz,color\n");
 	// output particle positions & (scalar) particle color
 	for(i=0;i<n;i++)
-		fprintf(f,"%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n", VEC(pos,i)[0], VEC(pos,i)[1], VEC(pos,i)[2], VEC(vel,i)[0], VEC(vel,i)[1], VEC(y,i)[2], VEC(angvel,i)[0], VEC(angvel,i)[1], VEC(angvel,i)[2], color[i]);
+		fprintf(f,"%f,%f,%f,%f,%f,%f,%f,%f,%f,%f\n", VEC(pos,i)[0], VEC(pos,i)[1], VEC(pos,i)[2], VEC(vel,i)[0], VEC(vel,i)[1], VEC(vel,i)[2], VEC(angvel,i)[0], VEC(angvel,i)[1], VEC(angvel,i)[2], color[i]);
 	fclose(f);
 }
 

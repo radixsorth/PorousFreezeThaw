@@ -7,7 +7,7 @@ Numerical solvers for:
 
 This repository contains supplementary materials for the manuscripts
 
-**Pavel Strachota - Three-dimensional numerical simulation of water freezing and thawing in a container filled with glass beads**
+**Pavel Strachota - Three-dimensional phase-field simulations of water freezing and thawing at pore-scale**
 
 and
 

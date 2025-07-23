@@ -24,9 +24,12 @@ The directory structure is as follows:
 │   │       ├── 100_low-resolution
 │   │       ├── 200_medium-resolution
 │   │       │   └── Movies-with-temperature-field
-│   │       └── 400_high-resolution
-│   │           ├── Movies-without-temperature-field
-│   │           └── Movies-with-temperature-field
+│   │       ├── 400_high-resolution
+│   │       │   ├── Movies-without-temperature-field
+│   │       │   └── Movies-with-temperature-field
+│   │       └── PhysRevE-2025
+│   │           └── 200_medium-resolution
+│   │               └── Movies-with-temperature-field
 │   ├── sphere-collider                             # C source code of the full DEM simulator
 │   │   └── OUTPUT
 │   └── sphere-collider-MATLAB                      # MATLAB code of the basic DEM simulator (more cases)
